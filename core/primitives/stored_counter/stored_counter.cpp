@@ -9,7 +9,7 @@
 #include "common/span.hpp"
 
 namespace fc::primitives {
-  StoredCounter::StoredCounter(std::shared_ptr<Datastore> datastore,
+  StoredCounter::StoredCounter(std::shared_ptr<BufferMap> datastore,
                                std::string key)
       : datastore_(std::move(datastore)), key_(fc::common::span::cbytes(key)) {}
 

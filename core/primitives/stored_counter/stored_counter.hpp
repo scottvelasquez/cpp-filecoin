@@ -7,12 +7,13 @@
 #define CPP_FILECOIN_CORE_PRIMITIVES_STORED_COUNTER_HPP
 
 #include <mutex>
+#include <storage/buffer_map.hpp>
 #include "common/buffer.hpp"
 #include "common/outcome.hpp"
 #include "storage/face/persistent_map.hpp"
 
 namespace fc::primitives {
-  using Datastore = storage::face::PersistentMap<Buffer, Buffer>;
+  using fc::storage::BufferMap;
 
   class Counter {
    public:
@@ -23,12 +24,12 @@ namespace fc::primitives {
 
   class StoredCounter : public Counter {
    public:
-    StoredCounter(std::shared_ptr<Datastore> datastore, std::string key);
+    StoredCounter(std::shared_ptr<BufferMap> datastore, std::string key);
 
     outcome::result<uint64_t> next() override;
 
    private:
-    std::shared_ptr<Datastore> datastore_;
+    std::shared_ptr<BufferMap> datastore_;
     Buffer key_;
 
     std::mutex mutex_;

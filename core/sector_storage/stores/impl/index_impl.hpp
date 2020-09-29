@@ -34,7 +34,7 @@ namespace fc::sector_storage::stores {
 
   class SectorIndexImpl : public SectorIndex {
    public:
-      SectorIndexImpl();
+    SectorIndexImpl();
 
     outcome::result<void> storageAttach(const StorageInfo &storage_info,
                                         const FsStat &stat) override;

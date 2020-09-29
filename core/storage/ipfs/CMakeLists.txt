@@ -24,4 +24,5 @@ target_link_libraries(ipfs_datastore_leveldb
     )
 
 add_subdirectory(merkledag)
+add_subdirectory(api_ipfs_datastore)
 add_subdirectory(graphsync)

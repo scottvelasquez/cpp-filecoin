@@ -19,6 +19,10 @@ add_executable(node_main
     )
 target_link_libraries(node_main
     Boost::program_options
-    node
     rpc
+    storage_fsm
+    store
+    manager
+    in_memory_storage
+    ipfs_datastore_in_memory
     )

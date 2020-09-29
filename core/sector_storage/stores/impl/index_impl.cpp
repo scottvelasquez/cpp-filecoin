@@ -19,9 +19,9 @@ namespace fc::sector_storage::stores {
 
   bool isValidUrl(const std::string &url) {
     static std::regex url_regex(
-        "https?:\\/\\/"
-        "(www\\.)?[-a-zA-Z0-9@:%._\\+~#=]{2,256}\\.[a-z]{2,4}\\b([-a-zA-Z0-9@:%"
-        "_\\+.~#?&//=]*)");
+        "((http|ftp|https)://)?"
+        "([\\w_-]+(?:(?:\\.[\\w_-]+)+))"
+        "([\\w.,@?^=%&:/~+#-]*[\\w@?^=%&/~+#-])?");
     return std::regex_match(url, url_regex);
   }
 
