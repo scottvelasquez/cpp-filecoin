@@ -160,9 +160,9 @@ namespace fc::sector_storage::stores {
     OUTCOME_TRY(storages_info,
                 index_->storageFindSector(sector, type, boost::none));
 
-    if (storages_info.empty()) {
-      return StoreErrors::kNotFoundSector;
-    }
+    // if (storages_info.empty()) {
+    //   return StoreErrors::kNotFoundSector;
+    // }
 
     for (const auto &info : storages_info) {
       OUTCOME_TRY(removeSector(sector, type, info.id));
@@ -472,9 +472,9 @@ namespace fc::sector_storage::stores {
                : primitives::sector_file::kOverheadSeal.at(type))
           * sector_size / primitives::sector_file::kOverheadDenominator;
 
-      if (stat.available < overhead) {
-        return StoreErrors::kCannotReserve;
-      }
+      // if (stat.available < overhead) {
+      //   return StoreErrors::kCannotReserve;
+      // }
 
       path_iter->second->reserved += overhead;
 

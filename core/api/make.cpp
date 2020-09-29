@@ -787,7 +787,7 @@ namespace fc::api {
             return TodoError::kError;
           }
           OUTCOME_TRY(chain_store->addBlock(block.header));
-          OUTCOME_TRY(pubsub->publish(block));
+          // OUTCOME_TRY(pubsub->publish(block));
           return outcome::success();
         }},
         .Version = {[]() {

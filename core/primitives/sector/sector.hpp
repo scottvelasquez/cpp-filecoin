@@ -25,7 +25,7 @@ namespace fc::primitives::sector {
     SectorNumber sector;
   };
   inline bool operator<(const SectorId &lhs, const SectorId &rhs) {
-    return lhs.miner < rhs.miner && lhs.sector < rhs.sector;
+    return lhs.miner == rhs.miner ? lhs.sector < rhs.sector : lhs.miner < rhs.miner;
   }
   inline bool operator==(const SectorId &lhs, const SectorId &rhs) {
     return lhs.miner == rhs.miner && lhs.sector == rhs.sector;

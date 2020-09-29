@@ -303,14 +303,14 @@ namespace fc::sector_storage::stores {
         continue;
       }
 
-      if (req_space > static_cast<uint64_t>(storage.fs_stat.available)) {
-        continue;
-      }
+      // if (req_space > static_cast<uint64_t>(storage.fs_stat.available)) {
+      //   continue;
+      // }
 
-      if (system_clock::now() - storage.last_heartbeat
-          > kSkippedHeartbeatThreshold) {
-        continue;
-      }
+      // if (system_clock::now() - storage.last_heartbeat
+      //     > kSkippedHeartbeatThreshold) {
+      //   continue;
+      // }
 
       if (storage.error) {
         continue;

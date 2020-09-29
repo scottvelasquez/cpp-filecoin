@@ -20,6 +20,18 @@
 #include "api/make.hpp"
 #include "miner/storage_fsm/impl/sealing_impl.hpp"
 
+#include <libp2p/protocol/common/asio/asio_scheduler.hpp>
+
+#include "storage/keystore/impl/in_memory/in_memory_keystore.hpp"
+#include "blockchain/impl/weight_calculator_impl.hpp"
+#include "storage/chain/impl/chain_store_impl.hpp"
+#include "storage/ipfs/impl/in_memory_datastore.hpp"
+#include "storage/mpool/mpool.hpp"
+#include "vm/interpreter/impl/interpreter_impl.hpp"
+#include "crypto/bls/impl/bls_provider_impl.hpp"
+#include "crypto/secp256k1/impl/secp256k1_provider_impl.hpp"
+#include "storage/car/car.hpp"
+
 namespace fs = boost::filesystem;
 
 namespace fc {
@@ -52,6 +64,64 @@ namespace fc {
   outcome::result<void> main(Config &config) {
     return outcome::success();
   }
+
+  auto readFile(const std::string &path) {
+    std::ifstream file{path, std::ios::binary | std::ios::ate};
+    assert(file.good());
+    Buffer buffer;
+    buffer.resize(file.tellg());
+    file.seekg(0, std::ios::beg);
+    file.read(common::span::string(buffer).data(), buffer.size());
+    return buffer;
+  }
+
+  template <typename T> using SP = std::shared_ptr<T>;
+  using api::Api;
+  using boost::asio::io_context;
+  using blockchain::weight::WeightCalculatorImpl;
+  using storage::blockchain::ChainStoreImpl;
+  using vm::interpreter::InterpreterImpl;
+  using libp2p::protocol::AsioScheduler;
+  using api::Tipset;
+  using storage::keystore::InMemoryKeyStore;
+  using api::Address;
+  struct Objects {
+    Objects() {
+      io = std::make_shared<io_context>();
+      ipld = std::make_shared<storage::ipfs::InMemoryDatastore>();
+      auto roots{storage::car::loadCar(*ipld, readFile(std::string{getenv("HOME")} + "/mygenesis.car")).value()};
+      auto genesis{Tipset::load(*ipld, roots).value()};
+      auto weighter{std::make_shared<WeightCalculatorImpl>(ipld)};
+      auto interpreter{std::make_shared<InterpreterImpl>()};
+      chainstore = std::make_shared<ChainStoreImpl>(ipld, weighter, genesis.blks[0], genesis);
+      auto mpool{storage::mpool::Mpool::create(ipld, chainstore)};
+      auto msgwaiter{storage::blockchain::MsgWaiter::create(ipld, chainstore)};
+      auto keystore{std::make_shared<storage::keystore::InMemoryKeyStore>(std::make_shared<crypto::bls::BlsProviderImpl>(), std::make_shared<crypto::secp256k1::Secp256k1ProviderImpl>())};
+      auto _api{api::makeImpl(chainstore, weighter, ipld, mpool, interpreter, msgwaiter, nullptr, nullptr, nullptr, keystore)};
+      api = std::make_shared<Api>(_api);
+      OUTCOME_EXCEPT(api->WalletImport({api::SignatureType::BLS, common::Blob<32>::fromHex("1914a3112a7a7fb59531ae1052ac572876c1a7b8914ddda6ed1893c78a4daf05").value()}));
+      sched = std::make_shared<AsioScheduler>(*io, libp2p::protocol::SchedulerConfig{10});
+    }
+
+    void mine() {
+      OUTCOME_EXCEPT(ts, api->ChainHead());
+      api::BlockTemplate bt;
+      bt.miner = Address::makeFromId(1000);
+      bt.parents = ts.cids;
+      bt.ticket.emplace();
+      bt.height = ts.height + 1;
+      bt.messages = api->MpoolPending({}).value();
+      auto bm{api->MinerCreateBlock(bt).value()};
+      OUTCOME_EXCEPT(api->SyncSubmitBlock(bm));
+      sched->schedule(1000, [&] { mine(); }).detach();
+    }
+
+    IpldPtr ipld;
+    SP<ChainStoreImpl> chainstore;
+    SP<Api> api;
+    SP<io_context> io;
+    SP<AsioScheduler> sched;
+  };
 }  // namespace fc
 
 using fc::primitives::FsStat;
@@ -118,7 +188,8 @@ int main(int argc, char **argv) {
   fc::primitives::RegisteredProof seal_proof_type =
       RegisteredProof::StackedDRG2KiBSeal;
 
-  std::shared_ptr<Api> api = std::make_shared<Api>();
+  fc::Objects obj;
+  auto api{obj.api}; auto context{obj.io};
 
   std::shared_ptr<TipsetCache> tipset_cache = std::make_shared<TipsetCacheImpl>(
       2 * fc::mining::kGlobalChainConfidence, api->ChainGetTipSetByHeight);
@@ -140,7 +211,7 @@ int main(int argc, char **argv) {
   };
 
   std::shared_ptr<SectorIndex> index = std::make_shared<SectorIndexImpl>();
-  std::vector<std::string> urls = {"127.0.0.1"};
+  std::vector<std::string> urls = {"http://127.0.0.1"};
 
   OUTCOME_EXCEPT(local, LocalStoreImpl::newLocalStore(storage, index, urls));
   std::unordered_map<std::string, std::string> auth_headers = {
@@ -167,8 +238,6 @@ int main(int argc, char **argv) {
           api,
           kMaxSectorExpirationExtension - 2 * kWPoStProvingPeriod,
           deadline_info.period_start % kWPoStProvingPeriod);
-  std::shared_ptr<boost::asio::io_context> context =
-      std::make_shared<boost::asio::io_context>();
 
   std::shared_ptr<Sealing> sealing = std::make_shared<SealingImpl>(
       api, events, miner_address, counter, sealer, policy, context);
@@ -203,21 +272,13 @@ int main(int argc, char **argv) {
           },
   };
 
-  api->ChainHead = [=]() -> fc::outcome::result<fc::api::Tipset> {
-    fc::api::BlockHeader block;
-    block.miner = miner_address;
-    block.height = 1;
-    block.ticket = fc::primitives::block::Ticket{
-        .bytes = {32, '\0'},
-    };
-    return fc::api::Tipset::create({block});
-  };
-
   OUTCOME_EXCEPT(
       piece,
       sealing->addPieceToAnySector(piece_commitment_a_size, file_a, deal));
 
   OUTCOME_EXCEPT(sealing->startPacking(piece.sector));
+
+  obj.io->post([&] { obj.mine(); });
 
   context->run();
 }

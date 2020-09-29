@@ -29,7 +29,7 @@ namespace fc::sector_storage::stores {
   };
 
   inline bool operator<(const Decl &lhs, const Decl &rhs) {
-    return lhs.sector_id < rhs.sector_id && lhs.type < rhs.type;
+    return lhs.sector_id == rhs.sector_id ? lhs.type < rhs.type : lhs.sector_id < rhs.sector_id;
   }
 
   class SectorIndexImpl : public SectorIndex {

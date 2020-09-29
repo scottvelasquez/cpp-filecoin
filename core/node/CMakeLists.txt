@@ -25,4 +25,10 @@ target_link_libraries(node_main
     manager
     in_memory_storage
     ipfs_datastore_in_memory
+
+    node
+    p2p::asio_scheduler
+    car
+    mpool
+    p2p::p2p_gossip
     )

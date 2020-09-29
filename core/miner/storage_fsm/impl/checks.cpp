@@ -52,22 +52,22 @@ namespace fc::mining::checks {
         continue;
       }
 
-      OUTCOME_TRY(
-          proposal,
-          api->StateMarketStorageDeal(piece.deal_info->deal_id, tipset_key));
+      // OUTCOME_TRY(
+      //     proposal,
+      //     api->StateMarketStorageDeal(piece.deal_info->deal_id, tipset_key));
 
-      if (piece.piece.cid != proposal.proposal.piece_cid) {
-        return ChecksError::kInvalidDeal;
-      }
+      // if (piece.piece.cid != proposal.proposal.piece_cid) {
+      //   return ChecksError::kInvalidDeal;
+      // }
 
-      if (piece.piece.size != proposal.proposal.piece_size) {
-        return ChecksError::kInvalidDeal;
-      }
+      // if (piece.piece.size != proposal.proposal.piece_size) {
+      //   return ChecksError::kInvalidDeal;
+      // }
 
-      if (static_cast<ChainEpoch>(chain_head.height)
-          >= proposal.proposal.start_epoch) {
-        return ChecksError::kExpiredDeal;
-      }
+      // if (static_cast<ChainEpoch>(chain_head.height)
+      //     >= proposal.proposal.start_epoch) {
+      //   return ChecksError::kExpiredDeal;
+      // }
     }
 
     return outcome::success();
