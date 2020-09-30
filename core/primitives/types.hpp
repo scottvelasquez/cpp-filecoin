@@ -83,7 +83,7 @@ namespace fc::primitives {
 
     uint64_t reserved_memory;  // Used by system / other processes
 
-    uint64_t cpus;  // Logical cores
+    int64_t cpus;  // Logical cores
     std::vector<std::string> gpus;
   };
 

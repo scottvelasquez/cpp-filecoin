@@ -31,4 +31,9 @@ target_link_libraries(node_main
     car
     mpool
     p2p::p2p_gossip
+    storage_market_client
+    chain_events
+    filestore
+    storage_market_provider
+    pieceio
     )

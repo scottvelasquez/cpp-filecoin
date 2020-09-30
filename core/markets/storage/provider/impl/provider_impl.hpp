@@ -63,6 +63,9 @@ namespace fc::markets::storage::provider {
                         std::shared_ptr<PieceIO> piece_io,
                         std::shared_ptr<FileStore> filestore);
 
+    void foo(std::shared_ptr<MinerDeal>,
+              std::shared_ptr<std::future<outcome::result<void>>>);
+
     auto init() -> outcome::result<void> override;
 
     auto start() -> outcome::result<void> override;

@@ -21,6 +21,7 @@
 #include "miner/storage_fsm/impl/sealing_impl.hpp"
 
 #include <libp2p/protocol/common/asio/asio_scheduler.hpp>
+#include <libp2p/injector/host_injector.hpp>
 
 #include "storage/keystore/impl/in_memory/in_memory_keystore.hpp"
 #include "blockchain/impl/weight_calculator_impl.hpp"
@@ -31,8 +32,14 @@
 #include "crypto/bls/impl/bls_provider_impl.hpp"
 #include "crypto/secp256k1/impl/secp256k1_provider_impl.hpp"
 #include "storage/car/car.hpp"
+#include "markets/storage/chain_events/impl/chain_events_impl.hpp"
+#include "markets/storage/provider/impl/provider_impl.hpp"
+#include "storage/filestore/impl/filesystem/filesystem_filestore.hpp"
+#include "markets/storage/client/impl/storage_market_client_impl.hpp"
 
 namespace fs = boost::filesystem;
+
+std::promise<fc::CID> manimp;
 
 namespace fc {
   struct Config {
@@ -85,10 +92,26 @@ namespace fc {
   using api::Tipset;
   using storage::keystore::InMemoryKeyStore;
   using api::Address;
+  using markets::storage::provider::StorageProviderImpl;
+  using storage::ipfs::InMemoryDatastore;
+  using markets::storage::client::StorageMarketClientImpl;
+  using libp2p::Host;
+  using storage::InMemoryStorage;
+  using api::MinerApi;
+  using libp2p::multi::Multiaddress;
+  using libp2p::peer::PeerId;
+  using api::RegisteredProof;
+  using api::TokenAmount;
+  using api::UnsignedMessage;
+  using markets::pieceio::PieceIOImpl;
+  using primitives::piece::UnpaddedPieceSize;
   struct Objects {
     Objects() {
-      io = std::make_shared<io_context>();
-      ipld = std::make_shared<storage::ipfs::InMemoryDatastore>();
+      auto inj{libp2p::injector::makeHostInjector()};
+      io = inj.create<std::shared_ptr<io_context>>();
+      host = inj.create<std::shared_ptr<Host>>();
+
+      ipld = std::make_shared<InMemoryDatastore>();
       auto roots{storage::car::loadCar(*ipld, readFile(std::string{getenv("HOME")} + "/mygenesis.car")).value()};
       auto genesis{Tipset::load(*ipld, roots).value()};
       auto weighter{std::make_shared<WeightCalculatorImpl>(ipld)};
@@ -99,8 +122,39 @@ namespace fc {
       auto keystore{std::make_shared<storage::keystore::InMemoryKeyStore>(std::make_shared<crypto::bls::BlsProviderImpl>(), std::make_shared<crypto::secp256k1::Secp256k1ProviderImpl>())};
       auto _api{api::makeImpl(chainstore, weighter, ipld, mpool, interpreter, msgwaiter, nullptr, nullptr, nullptr, keystore)};
       api = std::make_shared<Api>(_api);
-      OUTCOME_EXCEPT(api->WalletImport({api::SignatureType::BLS, common::Blob<32>::fromHex("1914a3112a7a7fb59531ae1052ac572876c1a7b8914ddda6ed1893c78a4daf05").value()}));
+      signer = api->WalletImport({api::SignatureType::BLS, common::Blob<32>::fromHex("1914a3112a7a7fb59531ae1052ac572876c1a7b8914ddda6ed1893c78a4daf05").value()}).value();
       sched = std::make_shared<AsioScheduler>(*io, libp2p::protocol::SchedulerConfig{10});
+
+      api->WalletDefaultAddress = [&] { return signer; };
+      api->MarketEnsureAvailable = [&](auto &address, auto &wallet, auto &amount, auto &tsk) -> outcome::result<boost::optional<CID>> {
+        OUTCOME_TRY(balance, api->StateMarketBalance(address, tsk));
+        TokenAmount more{amount - (balance.escrow - balance.locked)};
+        if (more <= 0) { return boost::none; }
+        UnsignedMessage message;
+        message.from = wallet;
+        message.to = vm::actor::kStorageMarketAddress;
+        message.value = std::move(more);
+        message.method = vm::actor::builtin::market::AddBalance::Number;
+        message.gas_limit = 10000000;
+        OUTCOME_TRYA(message.params, codec::cbor::encode(address));
+        OUTCOME_TRY(_message, api->MpoolPushMessage(message));
+        return _message.getCid();
+      };
+
+      pieceio = std::make_shared<PieceIOImpl>(ipld);
+      storageclient = std::make_shared<StorageMarketClientImpl>(host, io, std::make_shared<InMemoryStorage>(), api, pieceio);
+      OUTCOME_EXCEPT(storageclient->init());
+      storageclient->run();
+
+      mapi = std::make_shared<MinerApi>();
+      auto filestore{std::make_shared<storage::filestore::FileSystemFileStore>()};
+      auto chain_events{std::make_shared<markets::storage::chain_events::ChainEventsImpl>(api)};
+      OUTCOME_EXCEPT(chain_events->init());
+      storageprovider = std::make_shared<StorageProviderImpl>( api::RegisteredProof::StackedDRG2KiBSeal, host, io, std::make_shared<InMemoryStorage>(), api, mapi, chain_events, miner, pieceio, filestore);
+      OUTCOME_EXCEPT(storageprovider->init());
+      OUTCOME_EXCEPT(storageprovider->start());
+      OUTCOME_EXCEPT(host->listen(maddr));
+      host->start();
     }
 
     void mine() {
@@ -116,11 +170,31 @@ namespace fc {
       sched->schedule(1000, [&] { mine(); }).detach();
     }
 
+    void deal() {
+      deal_root = ipld->setCbor(std::string{"sample deal data /.hunter/_Base/130ab68/c914b13/bd99f1b/Install/include/boost/optional/optional.hpp /.hunter/_Base/130ab68/c914b13/bd99f1b/Install/include/boost/optional/optional.hpp /.hunter/_Base/130ab68/c914b13/bd99f1b/Install/include/boost/optional/optional.hpp"}).value();
+      auto ab{pieceio->generatePieceCommitment(RegisteredProof::StackedDRG2KiBSeal, deal_root, {}).value()};
+      piece = ab.first; piecesize = ab.second;
+      OUTCOME_EXCEPT(storageclient->proposeStorageDeal(signer,
+        {miner, {}, worker, 2 << 10, {host->getId(), {maddr}}},
+        {"manual", deal_root, piece, piecesize},
+        60, 60 + 180 * 2880, markets::storage::provider::kDefaultPrice, 0, RegisteredProof::StackedDRG2KiBSeal
+      ));
+    }
+
     IpldPtr ipld;
     SP<ChainStoreImpl> chainstore;
     SP<Api> api;
     SP<io_context> io;
     SP<AsioScheduler> sched;
+    CID deal_root, piece;
+    UnpaddedPieceSize piecesize;
+    SP<PieceIOImpl> pieceio;
+    Address signer, miner{Address::makeFromId(1000)}, worker{Address::makeFromId(100)};
+    SP<Host> host;
+    SP<StorageMarketClientImpl> storageclient;
+    SP<StorageProviderImpl> storageprovider;
+    SP<MinerApi> mapi;
+    Multiaddress maddr{Multiaddress::create("/ip4/127.0.0.1/tcp/5975").value()};
   };
 }  // namespace fc
 
@@ -242,43 +316,22 @@ int main(int argc, char **argv) {
   std::shared_ptr<Sealing> sealing = std::make_shared<SealingImpl>(
       api, events, miner_address, counter, sealer, policy, context);
 
-  fc::common::Blob<2032> some_bytes;
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<uint8_t> dis(0, 255);
-  for (size_t i = 0; i < 2032; i++) {
-    some_bytes[i] = dis(gen);
-  }
-
-  auto path_model = fs::temp_directory_path().append("%%%%%");
-  std::string piece_file_a_path =
-      boost::filesystem::unique_path(path_model).string();
-  boost::filesystem::ofstream piece_file_a(piece_file_a_path);
-
-  fc::mining::UnpaddedPieceSize piece_commitment_a_size(2032);
-  for (size_t i = 0; i < piece_commitment_a_size; i++) {
-    piece_file_a << some_bytes[i];
-  }
-  piece_file_a.close();
-
-  fc::mining::PieceData file_a(piece_file_a_path);
-
-  fc::mining::DealInfo deal{
-      .deal_id = 1,
-      .deal_schedule =
-          fc::mining::types::DealSchedule{
-              .start_epoch = 0,
-              .end_epoch = 0,
-          },
+  obj.mapi->AddPiece = [&](auto size, auto &path, auto &info) {
+    OUTCOME_EXCEPT(piece, sealing->addPieceToAnySector(size, fc::mining::PieceData{path}, info));
+    OUTCOME_EXCEPT(sealing->startPacking(piece.sector));
+    return fc::outcome::success();
   };
 
-  OUTCOME_EXCEPT(
-      piece,
-      sealing->addPieceToAnySector(piece_commitment_a_size, file_a, deal));
-
-  OUTCOME_EXCEPT(sealing->startPacking(piece.sector));
-
   obj.io->post([&] { obj.mine(); });
+
+  obj.io->post([&] { obj.deal(); });
+
+  std::thread{[&]() {
+    auto dc{manimp.get_future().get()};
+    spdlog::info("MANIMP");
+    OUTCOME_EXCEPT(car, fc::storage::car::makeSelectiveCar(*obj.ipld, {{obj.deal_root, {}}}));
+    OUTCOME_EXCEPT(obj.storageprovider->importDataForDeal(dc, car));
+  }}.detach();
 
   context->run();
 }

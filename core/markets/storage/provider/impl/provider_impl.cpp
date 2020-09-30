@@ -40,6 +40,8 @@
     return;                                                             \
   }
 
+extern std::promise<fc::CID> manimp;
+
 namespace fc::markets::storage::provider {
   using api::MsgWait;
   using data_transfer::Voucher;
@@ -81,6 +83,7 @@ namespace fc::markets::storage::provider {
         piece_io_{std::move(piece_io)},
         piece_storage_{std::make_shared<PieceStorageImpl>(datastore)},
         filestore_{filestore} {
+    logger_->set_level(spdlog::level::debug);
     auto scheduler = std::make_shared<libp2p::protocol::AsioScheduler>(
         *context_, libp2p::protocol::SchedulerConfig{});
     auto graphsync =
@@ -285,7 +288,7 @@ namespace fc::markets::storage::provider {
     OUTCOME_TRY(chain_head, api_->ChainHead());
     OUTCOME_TRY(tipset_key, chain_head.makeKey());
     if (static_cast<ChainEpoch>(chain_head.height)
-        > proposal.start_epoch - kDefaultDealAcceptanceBuffer) {
+        > proposal.start_epoch - 0) {
       deal->message =
           "Deal proposal verification failed, deal start epoch is too soon or "
           "deal already expired";
@@ -360,14 +363,14 @@ namespace fc::markets::storage::provider {
     OUTCOME_TRY(worker_info,
                 api_->StateMinerInfo(
                     deal->client_deal_proposal.proposal.provider, tipset_key));
-    std::vector<ClientDealProposal> params{deal->client_deal_proposal};
+    PublishStorageDeals::Params params{{deal->client_deal_proposal}};
     OUTCOME_TRY(encoded_params, codec::cbor::encode(params));
     UnsignedMessage unsigned_message(vm::actor::kStorageMarketAddress,
                                      worker_info.worker,
                                      0,
                                      TokenAmount{0},
                                      kDefaultGasPrice,
-                                     kDefaultGasLimit,
+                                     kDefaultGasLimit * 100,
                                      PublishStorageDeals::Number,
                                      MethodParams{encoded_params});
     OUTCOME_TRY(signed_message, api_->MpoolPushMessage(unsigned_message));
@@ -580,6 +583,7 @@ namespace fc::markets::storage::provider {
       StorageDealStatus from,
       StorageDealStatus to) {
     logger_->debug("Waiting for importDataForDeal() call");
+    manimp.set_value(deal->proposal_cid);
   }
 
   void StorageProviderImpl::onProviderEventFundingInitiated(
@@ -694,7 +698,8 @@ namespace fc::markets::storage::provider {
       StorageDealStatus from,
       StorageDealStatus to) {
     // TODO hand off
-    // miner_node_api.addPiece
+    auto &p{deal->client_deal_proposal.proposal};
+    OUTCOME_EXCEPT(miner_api_->AddPiece(p.piece_size.unpadded(), deal->piece_path, {deal->deal_id, {p.start_epoch, p.end_epoch}}));
     FSM_SEND(deal, ProviderEvent::ProviderEventDealHandedOff);
   }
 
@@ -703,14 +708,28 @@ namespace fc::markets::storage::provider {
       ProviderEvent event,
       StorageDealStatus from,
       StorageDealStatus to) {
-    auto res =
-        chain_events_
-            ->onDealSectorCommitted(
-                deal->client_deal_proposal.proposal.provider, deal->deal_id)
-            ->get_future()
-            .get();
-    FSM_HALT_ON_ERROR(res, "OnDealSectorCommitted error", deal);
-    FSM_SEND(deal, ProviderEvent::ProviderEventDealActivated);
+    auto x = chain_events_->onDealSectorCommitted(deal->client_deal_proposal.proposal.provider, deal->deal_id)->get_future();
+    foo(deal, std::make_shared<decltype(x)>(std::move(x)));
+  }
+
+  void StorageProviderImpl::foo(
+      std::shared_ptr<MinerDeal> deal,
+      std::shared_ptr<std::future<outcome::result<void>>> pro) {
+    auto r{pro->wait_for(std::chrono::seconds{0})};
+    assert(r != std::future_status::deferred);
+    if (r == std::future_status::ready) {
+      auto res{pro->get()};
+      FSM_HALT_ON_ERROR(res, "OnDealSectorCommitted error", deal);
+      FSM_SEND(deal, ProviderEvent::ProviderEventDealActivated);
+    } else {
+      auto sch{std::make_shared<libp2p::protocol::AsioScheduler>(
+          *context_, libp2p::protocol::SchedulerConfig{})};
+      sch->schedule(1000,
+                    [sch, deal, pro, self{shared_from_this()}]() mutable {
+                      self->foo(deal, pro);
+                    })
+          .detach();
+    }
   }
 
   void StorageProviderImpl::onProviderEventDealActivated(

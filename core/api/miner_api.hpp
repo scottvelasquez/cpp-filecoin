@@ -34,7 +34,7 @@ namespace fc::api {
     API_METHOD(AddPiece,
                void,
                const UnpaddedPieceSize &,
-               const Buffer &,
+               const std::string &,
                const DealInfo &)
 
     /**

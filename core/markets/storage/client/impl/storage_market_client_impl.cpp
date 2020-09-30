@@ -73,6 +73,7 @@ namespace fc::markets::storage::client {
     auto graphsync =
         std::make_shared<GraphsyncImpl>(host, std::move(scheduler));
     datatransfer_ = std::make_shared<GraphSyncManager>(host, graphsync);
+    logger_->set_level(spdlog::level::debug);
   }
 
   outcome::result<void> StorageMarketClientImpl::init() {
@@ -403,9 +404,10 @@ namespace fc::markets::storage::client {
     }
 
     // check publish contains proposal cid
-    OUTCOME_TRY(proposals,
-                codec::cbor::decode<std::vector<ClientDealProposal>>(
+    OUTCOME_TRY(params,
+                codec::cbor::decode<PublishStorageDeals::Params>(
                     publish_message.params));
+    auto &proposals{params.deals};
     auto it = std::find(
         proposals.begin(), proposals.end(), deal->client_deal_proposal);
     if (it == proposals.end()) {
