@@ -837,6 +837,10 @@ namespace fc::mining {
     params.seal_epoch = info->ticket_epoch;
     params.deal_ids = info->getDealIDs();
 
+    params.replace_deadline = {};
+    params.replace_partition = {};
+    params.replace_sector = {};
+
     auto deposit = tryUpgradeSector(params);
 
     auto maybe_params = codec::cbor::encode(params);
@@ -855,12 +859,12 @@ namespace fc::mining {
 
     logger_->info("submitting precommit for sector: {}", info->sector_number);
     auto maybe_signed_msg = api_->MpoolPushMessage(vm::message::UnsignedMessage(
-        worker_addr,
         miner_address_,
+        worker_addr,
         0,
         deposit,
         1,
-        1000000,
+        100000000,
         vm::actor::builtin::miner::PreCommitSector::Number,
         MethodParams{maybe_params.value()}));  // TODO: max fee options
 
@@ -898,26 +902,27 @@ namespace fc::mining {
     logger_->info("Sector precommitted: {}", info->sector_number);
     OUTCOME_TRY(channel, api_->StateWaitMsg(info->precommit_message.value()));
 
-    auto maybe_lookup = channel.waitSync();
-    if (maybe_lookup.has_error()) {
-      logger_->error("sector precommit failed: {}",
-                     maybe_lookup.error().message());
-      FSM_SEND(info, SealingEvent::kSectorChainPreCommitFailed);
-      return outcome::success();
-    }
+    channel.wait([c{channel.channel}, info, this](auto &&maybe_lookup) {
+      if (maybe_lookup.has_error()) {
+        logger_->error("sector precommit failed: {}",
+                       maybe_lookup.error().message());
+        OUTCOME_EXCEPT(fsm_->send(info, SealingEvent::kSectorChainPreCommitFailed, {}));
+        return;
+      }
 
-    if (maybe_lookup.value().receipt.exit_code != vm::VMExitCode::kOk) {
-      logger_->error("sector precommit failed: exit code is {}",
-                     maybe_lookup.value().receipt.exit_code);
-      FSM_SEND(info, SealingEvent::kSectorChainPreCommitFailed);
-      return outcome::success();
-    }
+      if (maybe_lookup.value().receipt.exit_code != vm::VMExitCode::kOk) {
+        logger_->error("sector precommit failed: exit code is {}",
+                       maybe_lookup.value().receipt.exit_code);
+        OUTCOME_EXCEPT(fsm_->send(info, SealingEvent::kSectorChainPreCommitFailed, {}));
+        return;
+      }
 
-    std::shared_ptr<SectorPreCommitLandedContext> context =
-        std::make_shared<SectorPreCommitLandedContext>();
-    context->tipset_key = maybe_lookup.value().tipset;
+      std::shared_ptr<SectorPreCommitLandedContext> context =
+          std::make_shared<SectorPreCommitLandedContext>();
+      context->tipset_key = maybe_lookup.value().tipset;
 
-    FSM_SEND_CONTEXT(info, SealingEvent::kSectorPreCommitLanded, context);
+      OUTCOME_EXCEPT(fsm_->send(info, SealingEvent::kSectorPreCommitLanded, context));
+    });
     return outcome::success();
   }
 

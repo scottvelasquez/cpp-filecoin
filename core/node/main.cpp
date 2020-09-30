@@ -36,6 +36,7 @@
 #include "markets/storage/provider/impl/provider_impl.hpp"
 #include "storage/filestore/impl/filesystem/filesystem_filestore.hpp"
 #include "markets/storage/client/impl/storage_market_client_impl.hpp"
+#include "vm/actor/cgo/actors.hpp"
 
 namespace fs = boost::filesystem;
 
@@ -107,6 +108,8 @@ namespace fc {
   using primitives::piece::UnpaddedPieceSize;
   struct Objects {
     Objects() {
+      vm::actor::cgo::config(256, 2048, {RegisteredProof::StackedDRG2KiBSeal});
+
       auto inj{libp2p::injector::makeHostInjector()};
       io = inj.create<std::shared_ptr<io_context>>();
       host = inj.create<std::shared_ptr<Host>>();
@@ -171,7 +174,9 @@ namespace fc {
     }
 
     void deal() {
-      deal_root = ipld->setCbor(std::string{"sample deal data /.hunter/_Base/130ab68/c914b13/bd99f1b/Install/include/boost/optional/optional.hpp /.hunter/_Base/130ab68/c914b13/bd99f1b/Install/include/boost/optional/optional.hpp /.hunter/_Base/130ab68/c914b13/bd99f1b/Install/include/boost/optional/optional.hpp"}).value();
+      Buffer data;
+      data.resize(1928);
+      deal_root = ipld->setCbor(data).value();
       auto ab{pieceio->generatePieceCommitment(RegisteredProof::StackedDRG2KiBSeal, deal_root, {}).value()};
       piece = ab.first; piecesize = ab.second;
       OUTCOME_EXCEPT(storageclient->proposeStorageDeal(signer,
@@ -299,11 +304,6 @@ int main(int argc, char **argv) {
   OUTCOME_EXCEPT(sealer_, ManagerImpl::newManager(remote, scheduler, config));
   std::shared_ptr<Manager> sealer = std::move(sealer_);
 
-  api->StateMinerProvingDeadline =
-      [](const Address &,
-         const TipsetKey &) -> fc::outcome::result<fc::api::DeadlineInfo> {
-    return fc::api::DeadlineInfo::make(0, 1000, 0);
-  };
 
   OUTCOME_EXCEPT(deadline_info,
                  api->StateMinerProvingDeadline(miner_address, TipsetKey{}));
@@ -313,6 +313,7 @@ int main(int argc, char **argv) {
           kMaxSectorExpirationExtension - 2 * kWPoStProvingPeriod,
           deadline_info.period_start % kWPoStProvingPeriod);
 
+  counter->next().value();
   std::shared_ptr<Sealing> sealing = std::make_shared<SealingImpl>(
       api, events, miner_address, counter, sealer, policy, context);
 

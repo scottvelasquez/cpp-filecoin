@@ -119,10 +119,10 @@ namespace fc::mining::checks {
       OUTCOME_TRYA(result,
                    state.precommitted_sectors.get(sector_info->sector_number));
     } else {
-      OUTCOME_TRY(allocated_bitset, state.allocated_sectors.get());
-      if (allocated_bitset.has(sector_info->sector_number)) {
-        return ChecksError::kSectorAllocated;
-      }
+      // OUTCOME_TRY(allocated_bitset, state.allocated_sectors.get());
+      // if (allocated_bitset.has(sector_info->sector_number)) {
+      //   return ChecksError::kSectorAllocated;
+      // }
     }
     return result;
   }
