@@ -1086,14 +1086,15 @@ namespace fc::mining {
       return outcome::success();
     }
 
-    OUTCOME_TRY(collateral,
-                api_->StateMinerInitialPledgeCollateral(
-                    miner_address_, info->sector_number, tipset_key));
+    // OUTCOME_TRY(collateral,
+    //             api_->StateMinerInitialPledgeCollateral(
+    //                 miner_address_, info->sector_number, tipset_key));
 
-    collateral -= precommit_info_opt->precommit_deposit;
-    if (collateral < 0) {
-      collateral = 0;
-    }
+    // collateral -= precommit_info_opt->precommit_deposit;
+    // if (collateral < 0) {
+    //   collateral = 0;
+    // }
+    primitives::BigInt collateral = 0;
 
     // TODO: check seed / ticket are up to date
     auto maybe_signed_msg = api_->MpoolPushMessage(vm::message::UnsignedMessage(
@@ -1307,9 +1308,9 @@ namespace fc::mining {
           "retrying precommit even though the message failed to apply");
     }
 
-    // TODO: wait some time
-
-    FSM_SEND(info, SealingEvent::kSectorRetryPreCommit);
+    scheduler_->schedule(1000, [=] {
+      OUTCOME_EXCEPT(fsm_->send(info, SealingEvent::kSectorRetryPreCommit, {}));
+    }).detach();
     return outcome::success();
   }
 
