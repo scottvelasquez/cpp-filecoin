@@ -1299,9 +1299,9 @@ namespace fc::mining {
                                     // re-precommit
       }
 
-      // TODO: wait some type
-
-      FSM_SEND(info, SealingEvent::kSectorRetryWaitSeed);
+      scheduler_->schedule(1000, [=] {
+        OUTCOME_EXCEPT(fsm_->send(info, SealingEvent::kSectorRetryWaitSeed, {}));
+      }).detach();
       return outcome::success();
     }
 

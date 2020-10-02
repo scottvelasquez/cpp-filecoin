@@ -741,7 +741,7 @@ namespace fc::api {
                  -> outcome::result<SectorPreCommitOnChainInfo> {
               OUTCOME_TRY(context, tipsetContext(tipset_key));
               OUTCOME_TRY(state, context.minerState(address));
-              if (state.precommitted_sectors.has(sector_number)) {
+              if (!state.precommitted_sectors.has(sector_number)) {
                 return TodoError::kError;
               }
               return state.precommitted_sectors.get(sector_number);
