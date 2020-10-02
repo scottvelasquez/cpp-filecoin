@@ -114,7 +114,7 @@ namespace fc::api {
 
     outcome::result<Address> accountKey(const Address &id) {
       // TODO(turuslan): error if not account
-      OUTCOME_TRY(state, state_tree.state<AccountActorState>(id));
+      OUTCOME_EXCEPT(state, state_tree.state<AccountActorState>(id));
       return state.address;
     }
   };
@@ -196,6 +196,7 @@ namespace fc::api {
       }
       return sectors;
     };
+    std::ignore = getSectorsForWinningPoSt;
     return {
         .AuthNew = {[](auto) {
           return Buffer{1, 2, 3};
@@ -400,9 +401,10 @@ namespace fc::api {
                         DomainSeparationTag::WinningPoStChallengeSeed,
                         epoch,
                         seed)};
-                    OUTCOME_CB(
-                        info.sectors,
-                        getSectorsForWinningPoSt(miner, state, post_rand));
+                    // OUTCOME_CB(
+                    //     info.sectors,
+                    //     getSectorsForWinningPoSt(miner, state, post_rand));
+                    std::ignore = miner; std::ignore = state; std::ignore = post_rand;
                     if (info.sectors.empty()) {
                       return cb(boost::none);
                     }
@@ -474,11 +476,7 @@ namespace fc::api {
             result.receipt = {VMExitCode::kOk, maybe_result.value(), 0};
           } else {
             if (isVMExitCode(maybe_result.error())) {
-              auto ret_code =
-                  normalizeVMExitCode(VMExitCode{maybe_result.error().value()});
-              BOOST_ASSERT_MSG(ret_code,
-                               "c++ actor code returned unknown error");
-              result.receipt = {*ret_code, {}, 0};
+              result.receipt = {VMExitCode{maybe_result.error().value()}, {}, 0};
             } else {
               return maybe_result.error();
             }
