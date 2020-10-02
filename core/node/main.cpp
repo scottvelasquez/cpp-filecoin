@@ -20,23 +20,23 @@
 #include "api/make.hpp"
 #include "miner/storage_fsm/impl/sealing_impl.hpp"
 
-#include <libp2p/protocol/common/asio/asio_scheduler.hpp>
 #include <libp2p/injector/host_injector.hpp>
+#include <libp2p/protocol/common/asio/asio_scheduler.hpp>
 
-#include "storage/keystore/impl/in_memory/in_memory_keystore.hpp"
 #include "blockchain/impl/weight_calculator_impl.hpp"
-#include "storage/chain/impl/chain_store_impl.hpp"
-#include "storage/ipfs/impl/in_memory_datastore.hpp"
-#include "storage/mpool/mpool.hpp"
-#include "vm/interpreter/impl/interpreter_impl.hpp"
 #include "crypto/bls/impl/bls_provider_impl.hpp"
 #include "crypto/secp256k1/impl/secp256k1_provider_impl.hpp"
-#include "storage/car/car.hpp"
 #include "markets/storage/chain_events/impl/chain_events_impl.hpp"
-#include "markets/storage/provider/impl/provider_impl.hpp"
-#include "storage/filestore/impl/filesystem/filesystem_filestore.hpp"
 #include "markets/storage/client/impl/storage_market_client_impl.hpp"
+#include "markets/storage/provider/impl/provider_impl.hpp"
+#include "storage/car/car.hpp"
+#include "storage/chain/impl/chain_store_impl.hpp"
+#include "storage/filestore/impl/filesystem/filesystem_filestore.hpp"
+#include "storage/ipfs/impl/in_memory_datastore.hpp"
+#include "storage/keystore/impl/in_memory/in_memory_keystore.hpp"
+#include "storage/mpool/mpool.hpp"
 #include "vm/actor/cgo/actors.hpp"
+#include "vm/interpreter/impl/interpreter_impl.hpp"
 
 namespace fs = boost::filesystem;
 
@@ -83,29 +83,30 @@ namespace fc {
     return buffer;
   }
 
-  template <typename T> using SP = std::shared_ptr<T>;
-  using api::Api;
-  using boost::asio::io_context;
-  using blockchain::weight::WeightCalculatorImpl;
-  using storage::blockchain::ChainStoreImpl;
-  using vm::interpreter::InterpreterImpl;
-  using libp2p::protocol::AsioScheduler;
-  using api::Tipset;
-  using storage::keystore::InMemoryKeyStore;
+  template <typename T>
+  using SP = std::shared_ptr<T>;
   using api::Address;
-  using markets::storage::provider::StorageProviderImpl;
-  using storage::ipfs::InMemoryDatastore;
-  using markets::storage::client::StorageMarketClientImpl;
-  using libp2p::Host;
-  using storage::InMemoryStorage;
+  using api::Api;
   using api::MinerApi;
-  using libp2p::multi::Multiaddress;
-  using libp2p::peer::PeerId;
   using api::RegisteredProof;
+  using api::Tipset;
   using api::TokenAmount;
   using api::UnsignedMessage;
+  using blockchain::weight::WeightCalculatorImpl;
+  using boost::asio::io_context;
+  using libp2p::Host;
+  using libp2p::multi::Multiaddress;
+  using libp2p::peer::PeerId;
+  using libp2p::protocol::AsioScheduler;
   using markets::pieceio::PieceIOImpl;
+  using markets::storage::client::StorageMarketClientImpl;
+  using markets::storage::provider::StorageProviderImpl;
   using primitives::piece::UnpaddedPieceSize;
+  using storage::InMemoryStorage;
+  using storage::blockchain::ChainStoreImpl;
+  using storage::ipfs::InMemoryDatastore;
+  using storage::keystore::InMemoryKeyStore;
+  using vm::interpreter::InterpreterImpl;
   struct Objects {
     Objects() {
       vm::actor::cgo::config(256, 2048, {RegisteredProof::StackedDRG2KiBSeal});
@@ -115,24 +116,51 @@ namespace fc {
       host = inj.create<std::shared_ptr<Host>>();
 
       ipld = std::make_shared<InMemoryDatastore>();
-      auto roots{storage::car::loadCar(*ipld, readFile(std::string{getenv("HOME")} + "/mygenesis.car")).value()};
+      auto roots{
+          storage::car::loadCar(
+              *ipld, readFile(std::string{getenv("HOME")} + "/mygenesis.car"))
+              .value()};
       auto genesis{Tipset::load(*ipld, roots).value()};
       auto weighter{std::make_shared<WeightCalculatorImpl>(ipld)};
       auto interpreter{std::make_shared<InterpreterImpl>()};
-      chainstore = std::make_shared<ChainStoreImpl>(ipld, weighter, genesis.blks[0], genesis);
+      chainstore = std::make_shared<ChainStoreImpl>(
+          ipld, weighter, genesis.blks[0], genesis);
       auto mpool{storage::mpool::Mpool::create(ipld, chainstore)};
       auto msgwaiter{storage::blockchain::MsgWaiter::create(ipld, chainstore)};
-      auto keystore{std::make_shared<storage::keystore::InMemoryKeyStore>(std::make_shared<crypto::bls::BlsProviderImpl>(), std::make_shared<crypto::secp256k1::Secp256k1ProviderImpl>())};
-      auto _api{api::makeImpl(chainstore, weighter, ipld, mpool, interpreter, msgwaiter, nullptr, nullptr, nullptr, keystore)};
+      auto keystore{std::make_shared<storage::keystore::InMemoryKeyStore>(
+          std::make_shared<crypto::bls::BlsProviderImpl>(),
+          std::make_shared<crypto::secp256k1::Secp256k1ProviderImpl>())};
+      auto _api{api::makeImpl(chainstore,
+                              weighter,
+                              ipld,
+                              mpool,
+                              interpreter,
+                              msgwaiter,
+                              nullptr,
+                              nullptr,
+                              nullptr,
+                              keystore)};
       api = std::make_shared<Api>(_api);
-      signer = api->WalletImport({api::SignatureType::BLS, common::Blob<32>::fromHex("1914a3112a7a7fb59531ae1052ac572876c1a7b8914ddda6ed1893c78a4daf05").value()}).value();
-      sched = std::make_shared<AsioScheduler>(*io, libp2p::protocol::SchedulerConfig{10});
+      signer = api->WalletImport({api::SignatureType::BLS,
+                                  common::Blob<32>::fromHex(
+                                      "1914a3112a7a7fb59531ae1052ac572876"
+                                      "c1a7b8914ddda6ed1893c78a4daf05")
+                                      .value()})
+                   .value();
+      sched = std::make_shared<AsioScheduler>(
+          *io, libp2p::protocol::SchedulerConfig{10});
 
       api->WalletDefaultAddress = [&] { return signer; };
-      api->MarketEnsureAvailable = [&](auto &address, auto &wallet, auto &amount, auto &tsk) -> outcome::result<boost::optional<CID>> {
+      api->MarketEnsureAvailable =
+          [&](auto &address,
+              auto &wallet,
+              auto &amount,
+              auto &tsk) -> outcome::result<boost::optional<CID>> {
         OUTCOME_TRY(balance, api->StateMarketBalance(address, tsk));
         TokenAmount more{amount - (balance.escrow - balance.locked)};
-        if (more <= 0) { return boost::none; }
+        if (more <= 0) {
+          return boost::none;
+        }
         UnsignedMessage message;
         message.from = wallet;
         message.to = vm::actor::kStorageMarketAddress;
@@ -145,15 +173,29 @@ namespace fc {
       };
 
       pieceio = std::make_shared<PieceIOImpl>(ipld);
-      storageclient = std::make_shared<StorageMarketClientImpl>(host, io, std::make_shared<InMemoryStorage>(), api, pieceio);
+      storageclient = std::make_shared<StorageMarketClientImpl>(
+          host, io, std::make_shared<InMemoryStorage>(), api, pieceio);
       OUTCOME_EXCEPT(storageclient->init());
       storageclient->run();
 
       mapi = std::make_shared<MinerApi>();
-      auto filestore{std::make_shared<storage::filestore::FileSystemFileStore>()};
-      auto chain_events{std::make_shared<markets::storage::chain_events::ChainEventsImpl>(api)};
+      auto filestore{
+          std::make_shared<storage::filestore::FileSystemFileStore>()};
+      auto chain_events{
+          std::make_shared<markets::storage::chain_events::ChainEventsImpl>(
+              api)};
       OUTCOME_EXCEPT(chain_events->init());
-      storageprovider = std::make_shared<StorageProviderImpl>( api::RegisteredProof::StackedDRG2KiBSeal, host, io, std::make_shared<InMemoryStorage>(), api, mapi, chain_events, miner, pieceio, filestore);
+      storageprovider = std::make_shared<StorageProviderImpl>(
+          api::RegisteredProof::StackedDRG2KiBSeal,
+          host,
+          io,
+          std::make_shared<InMemoryStorage>(),
+          api,
+          mapi,
+          chain_events,
+          miner,
+          pieceio,
+          filestore);
       OUTCOME_EXCEPT(storageprovider->init());
       OUTCOME_EXCEPT(storageprovider->start());
       OUTCOME_EXCEPT(host->listen(maddr));
@@ -177,13 +219,21 @@ namespace fc {
       Buffer data;
       data.resize(1928);
       deal_root = ipld->setCbor(data).value();
-      auto ab{pieceio->generatePieceCommitment(RegisteredProof::StackedDRG2KiBSeal, deal_root, {}).value()};
-      piece = ab.first; piecesize = ab.second;
-      OUTCOME_EXCEPT(storageclient->proposeStorageDeal(signer,
-        {miner, {}, worker, 2 << 10, {host->getId(), {maddr}}},
-        {"manual", deal_root, piece, piecesize},
-        60, 60 + 180 * 2880, markets::storage::provider::kDefaultPrice, 0, RegisteredProof::StackedDRG2KiBSeal
-      ));
+      auto ab{pieceio
+                  ->generatePieceCommitment(
+                      RegisteredProof::StackedDRG2KiBSeal, deal_root, {})
+                  .value()};
+      piece = ab.first;
+      piecesize = ab.second;
+      OUTCOME_EXCEPT(storageclient->proposeStorageDeal(
+          signer,
+          {miner, {}, worker, 2 << 10, {host->getId(), {maddr}}},
+          {"manual", deal_root, piece, piecesize},
+          60,
+          60 + 180 * 2880,
+          markets::storage::provider::kDefaultPrice,
+          0,
+          RegisteredProof::StackedDRG2KiBSeal));
     }
 
     IpldPtr ipld;
@@ -194,7 +244,8 @@ namespace fc {
     CID deal_root, piece;
     UnpaddedPieceSize piecesize;
     SP<PieceIOImpl> pieceio;
-    Address signer, miner{Address::makeFromId(1000)}, worker{Address::makeFromId(100)};
+    Address signer, miner{Address::makeFromId(1000)},
+        worker{Address::makeFromId(100)};
     SP<Host> host;
     SP<StorageMarketClientImpl> storageclient;
     SP<StorageProviderImpl> storageprovider;
@@ -204,6 +255,7 @@ namespace fc {
 }  // namespace fc
 
 using fc::primitives::FsStat;
+using fc::sector_storage::stores::LocalPath;
 using fc::sector_storage::stores::StorageConfig;
 
 class MyLocalStorage : public fc::sector_storage::stores::LocalStorage {
@@ -268,7 +320,8 @@ int main(int argc, char **argv) {
       RegisteredProof::StackedDRG2KiBSeal;
 
   fc::Objects obj;
-  auto api{obj.api}; auto context{obj.io};
+  auto api{obj.api};
+  auto context{obj.io};
 
   std::shared_ptr<TipsetCache> tipset_cache = std::make_shared<TipsetCacheImpl>(
       2 * fc::mining::kGlobalChainConfidence, api->ChainGetTipSetByHeight);
@@ -281,8 +334,8 @@ int main(int argc, char **argv) {
       std::make_shared<fc::primitives::StoredCounter>(datastore, "/sectors");
 
   std::shared_ptr<MyLocalStorage> storage = std::make_shared<MyLocalStorage>();
-  storage->config =
-      StorageConfig{.storage_paths = {"/Users/soramitsu/MyStorage"}};
+  storage->config = StorageConfig{
+      .storage_paths = {LocalPath{.path = "/Users/soramitsu/MyStorage"}}};
   storage->stat = FsStat{
       .capacity = 30000,
       .available = 30000,
@@ -304,7 +357,6 @@ int main(int argc, char **argv) {
   OUTCOME_EXCEPT(sealer_, ManagerImpl::newManager(remote, scheduler, config));
   std::shared_ptr<Manager> sealer = std::move(sealer_);
 
-
   OUTCOME_EXCEPT(deadline_info,
                  api->StateMinerProvingDeadline(miner_address, TipsetKey{}));
   std::shared_ptr<PreCommitPolicy> policy =
@@ -318,7 +370,9 @@ int main(int argc, char **argv) {
       api, events, miner_address, counter, sealer, policy, context);
 
   obj.mapi->AddPiece = [&](auto size, auto &path, auto &info) {
-    OUTCOME_EXCEPT(piece, sealing->addPieceToAnySector(size, fc::mining::PieceData{path}, info));
+    OUTCOME_EXCEPT(
+        piece,
+        sealing->addPieceToAnySector(size, fc::mining::PieceData{path}, info));
     OUTCOME_EXCEPT(sealing->startPacking(piece.sector));
     return fc::outcome::success();
   };
@@ -330,7 +384,9 @@ int main(int argc, char **argv) {
   std::thread{[&]() {
     auto dc{manimp.get_future().get()};
     spdlog::info("MANIMP");
-    OUTCOME_EXCEPT(car, fc::storage::car::makeSelectiveCar(*obj.ipld, {{obj.deal_root, {}}}));
+    OUTCOME_EXCEPT(
+        car,
+        fc::storage::car::makeSelectiveCar(*obj.ipld, {{obj.deal_root, {}}}));
     OUTCOME_EXCEPT(obj.storageprovider->importDataForDeal(dc, car));
   }}.detach();
 

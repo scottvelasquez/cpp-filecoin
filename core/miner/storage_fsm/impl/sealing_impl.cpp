@@ -906,14 +906,16 @@ namespace fc::mining {
       if (maybe_lookup.has_error()) {
         logger_->error("sector precommit failed: {}",
                        maybe_lookup.error().message());
-        OUTCOME_EXCEPT(fsm_->send(info, SealingEvent::kSectorChainPreCommitFailed, {}));
+        OUTCOME_EXCEPT(
+            fsm_->send(info, SealingEvent::kSectorChainPreCommitFailed, {}));
         return;
       }
 
       if (maybe_lookup.value().receipt.exit_code != vm::VMExitCode::kOk) {
         logger_->error("sector precommit failed: exit code is {}",
                        maybe_lookup.value().receipt.exit_code);
-        OUTCOME_EXCEPT(fsm_->send(info, SealingEvent::kSectorChainPreCommitFailed, {}));
+        OUTCOME_EXCEPT(
+            fsm_->send(info, SealingEvent::kSectorChainPreCommitFailed, {}));
         return;
       }
 
@@ -921,7 +923,8 @@ namespace fc::mining {
           std::make_shared<SectorPreCommitLandedContext>();
       context->tipset_key = maybe_lookup.value().tipset;
 
-      OUTCOME_EXCEPT(fsm_->send(info, SealingEvent::kSectorPreCommitLanded, context));
+      OUTCOME_EXCEPT(
+          fsm_->send(info, SealingEvent::kSectorPreCommitLanded, context));
     });
     return outcome::success();
   }
@@ -930,16 +933,19 @@ namespace fc::mining {
       const std::shared_ptr<SectorInfo> &info) {
     OUTCOME_TRY(head, api_->ChainHead());
     OUTCOME_TRY(tipset_key, head.makeKey());
-    OUTCOME_TRY(precommit_info,
-                api_->StateSectorPreCommitInfo(
-                    miner_address_, info->sector_number, tipset_key));
-    if (!precommit_info.has_value()) {
-      logger_->error("precommit info not found on chain");
-      FSM_SEND(info, SealingEvent::kSectorChainPreCommitFailed);
-      return outcome::success();
+    auto maybe_precommit_info = api_->StateSectorPreCommitInfo(
+        miner_address_, info->sector_number, tipset_key);
+    if (maybe_precommit_info.has_error()) {
+      // TODO: change to some error or write adapter
+      if (maybe_precommit_info == outcome::failure(TodoError::kError)) {
+        logger_->error("precommit info not found on chain");
+        FSM_SEND(info, SealingEvent::kSectorChainPreCommitFailed);
+        return outcome::success();
+      }
+      return maybe_precommit_info.error();
     }
 
-    auto random_height = precommit_info->precommit_epoch
+    auto random_height = maybe_precommit_info.value().precommit_epoch
                          + vm::actor::builtin::miner::kPreCommitChallengeDelay;
 
     auto maybe_error = events_->chainAt(
@@ -1077,10 +1083,9 @@ namespace fc::mining {
     OUTCOME_TRY(worker_addr,
                 api_->StateMinerWorker(miner_address_, tipset_key));
 
-    OUTCOME_TRY(precommit_info_opt,
-                api_->StateSectorPreCommitInfo(
-                    miner_address_, info->sector_number, tipset_key));
-    if (!precommit_info_opt.has_value()) {
+    auto maybe_precommit_info = api_->StateSectorPreCommitInfo(
+        miner_address_, info->sector_number, tipset_key);
+    if (maybe_precommit_info == outcome::failure(TodoError::kError)) {
       logger_->error("precommit info not found on chain");
       FSM_SEND(info, SealingEvent::kSectorCommitFailed);
       return outcome::success();
@@ -1090,7 +1095,7 @@ namespace fc::mining {
     //             api_->StateMinerInitialPledgeCollateral(
     //                 miner_address_, info->sector_number, tipset_key));
 
-    // collateral -= precommit_info_opt->precommit_deposit;
+    // collateral -= maybe_precommit_info.value().precommit_deposit;
     // if (collateral < 0) {
     //   collateral = 0;
     // }
@@ -1267,9 +1272,6 @@ namespace fc::mining {
     auto maybe_info_opt = api_->StateSectorPreCommitInfo(
         miner_address_, info->sector_number, tipset_key);
     if (maybe_info_opt.has_error()) {
-      logger_->error("Check precommit error: {}",
-                     maybe_info_opt.error().message());
-    } else if (maybe_info_opt.value().has_value()) {
       if (info->precommit_message.has_value()) {
         logger_->warn(
             "sector {} is precommitted on chain, but we don't have precommit "
@@ -1286,12 +1288,12 @@ namespace fc::mining {
         logger_->warn("Context not have CommR");
         return outcome::success();
       }
-      if (maybe_info_opt.value()->info.sealed_cid != info->comm_r.get()) {
+      if (maybe_info_opt.value().info.sealed_cid != info->comm_r.get()) {
         logger_->warn(
             "sector {} is precommitted on chain, with different CommR: {} != "
             "{}",
             info->sector_number,
-            maybe_info_opt.value()->info.sealed_cid,
+            maybe_info_opt.value().info.sealed_cid,
             info->comm_r.get());
         return outcome::success();  // TODO: remove when the actor allows
                                     // re-precommit
@@ -1474,12 +1476,15 @@ namespace fc::mining {
 
     OUTCOME_TRY(address_encoded, codec::cbor::encode(miner_address_));
 
-    OUTCOME_TRY(precommit_info,
-                api_->StateSectorPreCommitInfo(
-                    miner_address_, info->sector_number, tipset_key));
+    auto maybe_precommit_info = api_->StateSectorPreCommitInfo(
+        miner_address_, info->sector_number, tipset_key);
 
-    if (precommit_info.has_value()) {
-      ticket_epoch = precommit_info->info.seal_epoch;
+    if (maybe_precommit_info.has_error()) {
+      if (maybe_precommit_info != outcome::failure(TodoError::kError)) {
+        return maybe_precommit_info.error();
+      }
+    } else {
+      ticket_epoch = maybe_precommit_info.value().info.seal_epoch;
     }
 
     OUTCOME_TRY(randomness,

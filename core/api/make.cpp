@@ -738,10 +738,13 @@ namespace fc::api {
             }},
         .StateSectorPreCommitInfo =
             {[=](auto address, auto sector_number, auto tipset_key)
-                 -> outcome::result<
-                     boost::optional<SectorPreCommitOnChainInfo>> {
-              // TODO(artyom-yurin): FIL-165 implement method
-              return outcome::success();
+                 -> outcome::result<SectorPreCommitOnChainInfo> {
+              OUTCOME_TRY(context, tipsetContext(tipset_key));
+              OUTCOME_TRY(state, context.minerState(address));
+              if (state.precommitted_sectors.has(sector_number)) {
+                return TodoError::kError;
+              }
+              return state.precommitted_sectors.get(sector_number);
             }},
         .StateSectorGetInfo = {[=](auto address,
                                    auto sector_number,

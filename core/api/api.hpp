@@ -411,7 +411,7 @@ namespace fc::api {
                SectorNumber,
                const TipsetKey &);
     API_METHOD(StateSectorPreCommitInfo,
-               boost::optional<SectorPreCommitOnChainInfo>,
+               SectorPreCommitOnChainInfo,
                const Address &,
                SectorNumber,
                const TipsetKey &);
