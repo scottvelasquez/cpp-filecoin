@@ -1105,8 +1105,8 @@ namespace fc::mining {
 
     // TODO: check seed / ticket are up to date
     auto maybe_signed_msg = api_->MpoolPushMessage(vm::message::UnsignedMessage(
-        worker_addr,
         miner_address_,
+        worker_addr,
         0,
         collateral,
         1,
