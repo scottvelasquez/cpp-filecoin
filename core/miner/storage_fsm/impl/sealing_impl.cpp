@@ -851,9 +851,10 @@ namespace fc::mining {
       return outcome::success();
     }
 
-    OUTCOME_TRY(
-        collateral,
-        api_->StateMinerPreCommitDepositForPower(miner_address_, params, key));
+    // OUTCOME_TRY(
+    //     collateral,
+    //     api_->StateMinerPreCommitDepositForPower(miner_address_, params, key));
+    TokenAmount collateral;
 
     deposit = std::max(deposit, collateral);
 
@@ -948,6 +949,7 @@ namespace fc::mining {
     auto random_height = maybe_precommit_info.value().precommit_epoch
                          + vm::actor::builtin::miner::kPreCommitChallengeDelay;
 
+    logger_->info("handleWaitSeed chainAt {} {}", random_height, types::kInteractivePoRepConfidence);
     auto maybe_error = events_->chainAt(
         [=](const Tipset &,
             ChainEpoch current_height) -> outcome::result<void> {
@@ -1299,9 +1301,7 @@ namespace fc::mining {
                                     // re-precommit
       }
 
-      scheduler_->schedule(1000, [=] {
-        OUTCOME_EXCEPT(fsm_->send(info, SealingEvent::kSectorRetryWaitSeed, {}));
-      }).detach();
+      spdlog::warn("disabled: kSectorRetryWaitSeed");
       return outcome::success();
     }
 
@@ -1310,9 +1310,7 @@ namespace fc::mining {
           "retrying precommit even though the message failed to apply");
     }
 
-    scheduler_->schedule(1000, [=] {
-      OUTCOME_EXCEPT(fsm_->send(info, SealingEvent::kSectorRetryPreCommit, {}));
-    }).detach();
+    spdlog::warn("disabled: kSectorRetryPreCommit");
     return outcome::success();
   }
 
@@ -1476,15 +1474,8 @@ namespace fc::mining {
 
     OUTCOME_TRY(address_encoded, codec::cbor::encode(miner_address_));
 
-    auto maybe_precommit_info = api_->StateSectorPreCommitInfo(
-        miner_address_, info->sector_number, tipset_key);
-
-    if (maybe_precommit_info.has_error()) {
-      if (maybe_precommit_info != outcome::failure(TodoError::kError)) {
-        return maybe_precommit_info.error();
-      }
-    } else {
-      ticket_epoch = maybe_precommit_info.value().info.seal_epoch;
+    if (auto _precommit_info{api_->StateSectorPreCommitInfo(miner_address_, info->sector_number, tipset_key)}) {
+      ticket_epoch = _precommit_info.value().info.seal_epoch;
     }
 
     OUTCOME_TRY(randomness,

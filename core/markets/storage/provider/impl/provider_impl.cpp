@@ -708,28 +708,9 @@ namespace fc::markets::storage::provider {
       ProviderEvent event,
       StorageDealStatus from,
       StorageDealStatus to) {
-    auto x = chain_events_->onDealSectorCommitted(deal->client_deal_proposal.proposal.provider, deal->deal_id)->get_future();
-    foo(deal, std::make_shared<decltype(x)>(std::move(x)));
-  }
-
-  void StorageProviderImpl::foo(
-      std::shared_ptr<MinerDeal> deal,
-      std::shared_ptr<std::future<outcome::result<void>>> pro) {
-    auto r{pro->wait_for(std::chrono::seconds{0})};
-    assert(r != std::future_status::deferred);
-    if (r == std::future_status::ready) {
-      auto res{pro->get()};
-      FSM_HALT_ON_ERROR(res, "OnDealSectorCommitted error", deal);
+    chain_events_->onDealSectorCommitted(deal->client_deal_proposal.proposal.provider, deal->deal_id, [=] {
       FSM_SEND(deal, ProviderEvent::ProviderEventDealActivated);
-    } else {
-      auto sch{std::make_shared<libp2p::protocol::AsioScheduler>(
-          *context_, libp2p::protocol::SchedulerConfig{})};
-      sch->schedule(1000,
-                    [sch, deal, pro, self{shared_from_this()}]() mutable {
-                      self->foo(deal, pro);
-                    })
-          .detach();
-    }
+    });
   }
 
   void StorageProviderImpl::onProviderEventDealActivated(

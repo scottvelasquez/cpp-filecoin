@@ -726,14 +726,14 @@ namespace fc::api {
             {[=](auto address,
                  auto precommit_info,
                  auto tipset_key) -> outcome::result<TokenAmount> {
-              // TODO(artyom-yurin): FIL-165 implement method
+              assert(false); // TODO(artyom-yurin): FIL-165 implement method
               return outcome::success();
             }},
         .StateMinerInitialPledgeCollateral =
             {[=](auto address,
                  auto sector_number,
                  auto tipset_key) -> outcome::result<TokenAmount> {
-              // TODO(artyom-yurin): FIL-165 implement method
+              assert(false); // TODO(artyom-yurin): FIL-165 implement method
               return outcome::success();
             }},
         .StateSectorPreCommitInfo =
@@ -750,19 +750,19 @@ namespace fc::api {
                                    auto sector_number,
                                    auto tipset_key)
                                    -> outcome::result<SectorOnChainInfo> {
-          // TODO(artyom-yurin): FIL-165 implement method
+          assert(false); // TODO(artyom-yurin): FIL-165 implement method
           return outcome::success();
         }},
         .StateSectorPartition = {[=](auto address,
                                      auto sector_number,
                                      auto tipset_key)
                                      -> outcome::result<SectorLocation> {
-          // TODO(artyom-yurin): FIL-165 implement method
+          assert(false); // TODO(artyom-yurin): FIL-165 implement method
           return outcome::success();
         }},
         .StateSearchMsg = {[=](auto &cid)
                                -> outcome::result<boost::optional<MsgWait>> {
-          // TODO(artyom-yurin): FIL-165 implement method
+          assert(false); // TODO(artyom-yurin): FIL-165 implement method
           return outcome::success();
         }},
         .StateWaitMsg = waitCb<MsgWait>([=](auto &&cid, auto &&cb) {

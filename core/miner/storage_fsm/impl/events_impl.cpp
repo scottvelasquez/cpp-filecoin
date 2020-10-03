@@ -44,6 +44,10 @@ namespace fc::mining {
                                             EpochDuration confidence,
                                             ChainEpoch height) {
     std::unique_lock<std::mutex> lock(mutex_);
+
+    OUTCOME_EXCEPT(head, api_->ChainHead());
+    tipset_cache_->add(head);
+
     auto best_tipset = tipset_cache_->best();
 
     if (!best_tipset) {
@@ -245,8 +249,7 @@ namespace fc::mining {
       return true;
     }
 
-    logger_->warn("Unexpected head change notification type");
-    return false;
+    return true;
   }
 
 }  // namespace fc::mining

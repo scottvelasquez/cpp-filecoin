@@ -16,8 +16,6 @@
 #include <utility>
 
 #include <boost/optional.hpp>
-#include <libp2p/protocol/common/asio/asio_scheduler.hpp>
-#include <libp2p/protocol/common/scheduler.hpp>
 #include "common/outcome.hpp"
 #include "host/context/host_context.hpp"
 
@@ -30,10 +28,7 @@
  */
 namespace fc::fsm {
   using fc::common::EnumClassHash;
-  using libp2p::protocol::Scheduler;
-  using Ticks = libp2p::protocol::Scheduler::Ticks;
-
-  const Scheduler::Ticks kSlowModeDelayMs = 100;
+  using boost::asio::io_context;
 
   /**
    * Container for state transitions caused by an event
@@ -261,19 +256,12 @@ namespace fc::fsm {
     /**
      * Creates a state machine
      * @param transition_rules - defines state transitions
-     * @param scheduler - libp2p Scheduler for async events processing
      */
     FSM(std::vector<TransitionRule> transition_rules,
-        HostContext context,
-        Ticks ticks = 50)
+        HostContext context)
         : running_{true},
-          delay_{kSlowModeDelayMs},
-          host_context_(std::move(context)) {
+          io(*context->getIoContext()) {
       initTransitions(std::move(transition_rules));
-      scheduler_ = std::make_shared<libp2p::protocol::AsioScheduler>(
-          *host_context_->getIoContext(),
-          libp2p::protocol::SchedulerConfig{ticks});
-      scheduler_handle_ = scheduler_->schedule(1000, [this] { onTimer(); });
     }
 
     ~FSM() {
@@ -324,6 +312,7 @@ namespace fc::fsm {
       std::lock_guard lock(event_queue_mutex_);
       event_queue_.emplace(entity_ptr,
                            std::make_pair(event, std::move(event_context)));
+      io.post([this] { onTimer(); });
       return outcome::success();
     }
 
@@ -363,7 +352,6 @@ namespace fc::fsm {
     /// Prevent further events processing
     void stop() {
       running_ = false;
-      scheduler_handle_.cancel();
     }
 
     /// Is events processing still enabled
@@ -398,8 +386,15 @@ namespace fc::fsm {
       }
     }
 
-    /// async events processor routine
     void onTimer() {
+      assert(running_);
+      while (!event_queue_.empty()) {
+        onTimer1();
+      }
+    }
+
+    /// async events processor routine
+    void onTimer1() {
       EventQueueItem event_pair;
       if (not running_) {
         return;
@@ -407,10 +402,8 @@ namespace fc::fsm {
       {
         std::lock_guard lock(event_queue_mutex_);
         if (event_queue_.empty()) {
-          scheduler_handle_.reschedule(kSlowModeDelayMs);
           return;
         }
-        scheduler_handle_.reschedule(0);
         event_pair = event_queue_.front();
         event_queue_.pop();
       }
@@ -450,13 +443,10 @@ namespace fc::fsm {
     }
 
     bool running_;            ///< FSM is enabled to process events
-    Scheduler::Ticks delay_;  ///< minimum async loop delay
 
     std::mutex event_queue_mutex_;
     std::queue<EventQueueItem> event_queue_;
-    std::shared_ptr<Scheduler> scheduler_;
-    Scheduler::Handle scheduler_handle_;
-    HostContext host_context_;
+    io_context &io;
 
     /// a dispatching list of events and what to do on event
     std::unordered_map<EventEnumType, TransitionRule> transitions_;

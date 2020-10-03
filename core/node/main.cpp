@@ -327,6 +327,7 @@ int main(int argc, char **argv) {
       2 * fc::mining::kGlobalChainConfidence, api->ChainGetTipSetByHeight);
   std::shared_ptr<Events> events =
       std::make_shared<EventsImpl>(api, tipset_cache);
+  events->subscribeHeadChanges();
   Address miner_address = fc::primitives::address::Address::makeFromId(1000);
 
   std::shared_ptr<BufferMap> datastore = std::make_shared<InMemoryStorage>();
