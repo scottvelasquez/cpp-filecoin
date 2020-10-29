@@ -19,6 +19,8 @@
 #include "vm/interpreter/impl/interpreter_impl.hpp"
 #include "vm/runtime/env.hpp"
 
+#include "vm/dvm/dvm.hpp"
+
 const auto kCorpusRoot{resourcePath("test-vectors/corpus")};
 auto brief(const std::string &path) {
   auto n{kCorpusRoot.size() + 1};
@@ -150,6 +152,8 @@ struct MessageVector {
   std::string path;
 };
 
+static std::string run_test_pattern{};
+
 auto search(bool enabled) {
   static auto all_vectors{[] {
     std::vector<MessageVector> vectors;
@@ -167,12 +171,26 @@ auto search(bool enabled) {
     return vectors;
   }()};
   std::vector<MessageVector> vectors;
+  bool has_pattern = !run_test_pattern.empty();
+
   for (auto &mv : all_vectors) {
-    auto _enabled{!mv.chaos};
-    if (_enabled == enabled) {
-      vectors.push_back(mv);
+    if (has_pattern) {
+      if (mv.path.find(run_test_pattern) != std::string::npos) {
+        vectors.push_back(mv);
+      }
+    } else {
+      auto _enabled{!mv.chaos};
+      if (_enabled == enabled) {
+        vectors.push_back(mv);
+      }
     }
   }
+
+  if (getenv("DVM_LOG")) {
+    fc::dvm::logging = true;
+    fc::dvm::logger->flush_on(spdlog::level::info);
+  }
+
   return vectors;
 }
 
@@ -190,15 +208,14 @@ void testTipsets(const MessageVector &mv, IpldPtr ipld) {
   OUTCOME_EXCEPT(parents, Tipset::create({parent}));
   auto i{0}, j{0};
   for (auto &ts : mv.tipsets) {
-    Tipset tipset;
-    tipset.height = ts.epoch;
+    fc::primitives::tipset::TipsetCreator cr;
     for (auto &blk : ts.blocks) {
-      auto &block{tipset.blks.emplace_back()};
+      fc::primitives::block::BlockHeader block;
       block.ticket.emplace();
       block.miner = blk.miner;
       block.election_proof.win_count = blk.win_count;
       block.height = ts.epoch;
-      block.parents = parents.cids;
+      block.parents = parents->key.cids();
       block.parent_base_fee = ts.base_fee;
       fc::primitives::block::MsgMeta meta;
       ipld->load(meta);
@@ -223,9 +240,13 @@ void testTipsets(const MessageVector &mv, IpldPtr ipld) {
       block.messages = ipld->setCbor(meta).value();
       block.parent_message_receipts = block.parent_state_root = state;
       OUTCOME_EXCEPT(cid, ipld->setCbor(block));
-      tipset.cids.push_back(cid);
+
+      OUTCOME_EXCEPT(cr.expandTipset(block));
     }
     std::vector<MessageReceipt> receipts;
+
+    auto tipset = cr.getTipset(true);
+
     OUTCOME_EXCEPT(res, vmi.applyBlocks(ipld, tipset, &receipts));
     state = res.state_root;
     EXPECT_EQ(res.message_receipts, mv.receipts_roots[i]);
@@ -253,7 +274,7 @@ void testMessages(const MessageVector &mv, IpldPtr ipld) {
   auto i{0};
   for (auto &[epoch, message] : mv.messages) {
     auto &receipt{mv.receipts[i]};
-    env->tipset.height = epoch;
+    env->epoch = epoch;
     auto size = message.from.isSecp256k1()
                     ? fc::vm::message::SignedMessage{message,
                                                      fc::crypto::signature::
@@ -310,3 +331,13 @@ INSTANTIATE_TEST_CASE_P(DISABLED_Vectors,
                         TestVectors,
                         testing::ValuesIn(search(false)),
                         testName);
+
+int main(int argc, char *argv[]) {
+  if (argc > 2 && std::string("run") == argv[1]) {
+    run_test_pattern = argv[2];
+    argc -= 2;
+    argv += 2;
+  }
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}
