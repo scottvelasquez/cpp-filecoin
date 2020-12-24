@@ -332,6 +332,7 @@ namespace fc {
     mapi->PledgeSector = [&]() -> outcome::result<void> {
       return sealing->pledgeSector();
     };
+    mapi->Version = [] { return api::VersionResult{"fuhon-miner", 0, 0}; };
     api::serve(mapi, *io, "127.0.0.1", config.api_port);
     api::rpc::saveInfo(config.repo_path, config.api_port, "stub");
 

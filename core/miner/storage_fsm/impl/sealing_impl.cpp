@@ -5,6 +5,8 @@
 
 #include "miner/storage_fsm/impl/sealing_impl.hpp"
 
+#include <boost/filesystem.hpp>
+
 #include "common/bitsutil.hpp"
 #include "host/context/impl/host_context_impl.hpp"
 #include "miner/storage_fsm/impl/checks.hpp"
@@ -34,6 +36,16 @@ namespace fc::mining {
   using vm::actor::MethodParams;
   using vm::actor::builtin::v0::miner::kMinSectorExpiration;
   using vm::actor::builtin::v0::miner::ProveCommitSector;
+
+  auto zeroPiece(uint64_t usize) {
+    auto path{fmt::format(
+        "/var/tmp/filecoin-proof-parameters/zero-piece-{}.bin", usize)};
+    if (!boost::filesystem::exists(path)) {
+      boost::filesystem::ofstream(path).close();
+      boost::filesystem::resize_file(path, usize);
+    }
+    return path;
+  }
 
   Ticks getWaitingTime(uint64_t errors_count = 0) {
     // TODO: Exponential backoff when we see consecutive failures
@@ -152,8 +164,8 @@ namespace fc::mining {
 
       piece.sector = sector_and_padding.sector;
 
-      PieceData zero_file("/dev/zero");
       for (const auto &pad : sector_and_padding.pads) {
+        PieceData zero_file{zeroPiece(pad.unpadded())};
         OUTCOME_TRY(addPiece(
             sector_and_padding.sector, pad.unpadded(), zero_file, boost::none));
       }
@@ -784,8 +796,8 @@ namespace fc::mining {
 
     std::vector<PieceInfo> result;
 
-    PieceData zero_file("/dev/zero");
     for (const auto &size : sizes) {
+      PieceData zero_file{zeroPiece(size)};
       OUTCOME_TRY(
           piece_info,
           sealer_->addPiece(sector, existing_piece_sizes, size, zero_file, 0));

@@ -24,38 +24,40 @@ namespace fc::vm::version {
     kVersion6,
     kVersion7,
     kVersion8,
+    kVersion9,
   };
 
-  const NetworkVersion kLatestVersion = NetworkVersion::kVersion8;
+  const NetworkVersion kLatestVersion = NetworkVersion::kVersion9;
 
   /**
    * Network version end heights
    */
   /** UpgradeBreeze, <= v0 network */
-  const ChainEpoch kUpgradeBreezeHeight = 41280;
+  const ChainEpoch kUpgradeBreezeHeight = -1;
 
   /** UpgradeSmoke, <= v1 network */
-  const ChainEpoch kUpgradeSmokeHeight = 51000;
+  const ChainEpoch kUpgradeSmokeHeight = -2;
 
   /** UpgradeIgnition, <= v2 network */
-  const ChainEpoch kUpgradeIgnitionHeight = 94000;
+  const ChainEpoch kUpgradeIgnitionHeight = -3;
 
   /** UpgradeRefuel, <= v3 network */
-  const ChainEpoch kUpgradeRefuelHeight = 130800;
+  const ChainEpoch kUpgradeRefuelHeight = -4;
 
   /** UpgradeActorsV2, <= v3 network */
-  const ChainEpoch kUpgradeActorsV2Height = 138720;
+  const ChainEpoch kUpgradeActorsV2Height = 3;
 
   /** UpgradeTape, <= v4 network */
-  const ChainEpoch kUpgradeTapeHeight = 140760;
+  const ChainEpoch kUpgradeTapeHeight = -5;
 
   /** UpgradeLiftoff, <= v5 network */
-  const ChainEpoch kUpgradeLiftoffHeight = 148888;
+  const ChainEpoch kUpgradeLiftoffHeight = -6;
 
   /** UpgradeKumquat, <= v5 network */
-  const ChainEpoch kUpgradeKumquatHeight = 170000;
-  const ChainEpoch kUpgradeCalicoHeight = 265200;
-  const ChainEpoch kUpgradePersianHeight = 272400;
+  const ChainEpoch kUpgradeKumquatHeight = -7;
+  const ChainEpoch kUpgradeCalicoHeight = -8;
+  const ChainEpoch kUpgradePersianHeight = -9;
+  const ChainEpoch kUpgradeOrangeHeight = -10; // 336458
 
   /**
    * Returns network version for blockchain height
@@ -73,6 +75,7 @@ namespace fc::vm::version {
     if (height <= kUpgradeKumquatHeight) return NetworkVersion::kVersion5;
     if (height <= kUpgradeCalicoHeight) return NetworkVersion::kVersion6;
     if (height <= kUpgradePersianHeight) return NetworkVersion::kVersion7;
+    if (height <= kUpgradeOrangeHeight) return NetworkVersion::kVersion8;
     return kLatestVersion;
   }
 }  // namespace fc::vm::version

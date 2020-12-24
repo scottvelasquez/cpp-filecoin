@@ -92,7 +92,7 @@ namespace fc::mining {
           }
         }};
         declare(false);
-        if (apply->height() <= vm::version::kUpgradeIgnitionHeight) {
+        if (apply->epoch() <= vm::version::kUpgradeIgnitionHeight) {
           declare(true);
         }
       }
