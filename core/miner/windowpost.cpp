@@ -29,6 +29,7 @@ namespace fc::mining {
     OUTCOME_TRY(info, api->StateMinerInfo(miner, {}));
     OUTCOME_TRYA(scheduler->worker, api->StateAccountKey(info.worker, {}));
     scheduler->part_size = info.window_post_partition_sectors;
+    scheduler->proof_type = info.seal_proof_type;
     scheduler->channel->read([scheduler](auto changes) {
       if (changes) {
         TipsetCPtr revert, apply;
