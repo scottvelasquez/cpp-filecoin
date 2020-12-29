@@ -25,7 +25,7 @@ namespace fc::markets::storage::provider {
     StorageAsk ask{.price = price,
                    .verified_price = price,
                    .min_piece_size = kDefaultMinPieceSize,
-                   .max_piece_size = kDefaultMaxPieceSize,
+                   .max_piece_size = PaddedPieceSize{512 << 20},
                    .miner = actor_,
                    .timestamp = timestamp,
                    .expiry = expiry,
