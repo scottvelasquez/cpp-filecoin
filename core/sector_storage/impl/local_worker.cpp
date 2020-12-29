@@ -312,7 +312,7 @@ namespace fc::sector_storage {
                                       randomness,
                                       unsealed_cid,
                                       primitives::piece::paddedIndex(offset),
-                                      size.padded()));
+                                      size));
 
       OUTCOME_TRY(proofs::Proofs::writeUnsealPiece(
           temp_file_path.string(),

@@ -34,7 +34,7 @@ namespace fc::api {
     f(a.ClientRetrieve);
     f(a.ClientStartDeal);
     f(a.GasEstimateMessageGas);
-    f(a.MarketEnsureAvailable);
+    f(a.MarketReserveFunds);
     f(a.MinerCreateBlock);
     f(a.MinerGetBaseInfo);
     f(a.MpoolPending);

@@ -360,12 +360,12 @@ namespace fc::api {
      * available funds. If additional funds are needed, they will be sent from
      * the 'wallet' address callback is immediately called if sufficient funds
      * are available
-     * @param address to ensure
      * @param wallet to send from
+     * @param address to ensure
      * @param amount to ensure
      * @return CID of transfer message if message was sent
      */
-    API_METHOD(MarketEnsureAvailable,
+    API_METHOD(MarketReserveFunds,
                boost::optional<CID>,
                const Address &,
                const Address &,

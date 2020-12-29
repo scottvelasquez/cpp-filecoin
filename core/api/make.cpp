@@ -352,7 +352,7 @@ namespace fc::api {
         // TODO(turuslan): FIL-165 implement method
         .GasEstimateMessageGas = {},
         // TODO(turuslan): FIL-165 implement method
-        .MarketEnsureAvailable = {},
+        .MarketReserveFunds = {},
         .MinerCreateBlock = {[=](auto &t) -> outcome::result<BlockWithCids> {
           OUTCOME_TRY(context, tipsetContext(t.parents, true));
           OUTCOME_TRY(miner_state, context.minerState(t.miner));

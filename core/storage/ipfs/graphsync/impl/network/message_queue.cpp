@@ -100,11 +100,6 @@ namespace fc::storage::ipfs::graphsync {
       return;
     }
 
-    if (n != res.value()) {
-      feedback_(state_.stream, Error::kMessageWriteError);
-      return;
-    }
-
     state_.total_bytes_written += n;
 
     dequeue();

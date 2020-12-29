@@ -381,6 +381,8 @@ namespace fc::storage::ipfs::graphsync {
   }
 
   void PeerContext::onStreamCleanupTimer() {
+    if (true) return;
+
     uint64_t max_expire_time = 0;
 
     if (streams_.empty()) {

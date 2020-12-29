@@ -1247,4 +1247,12 @@ namespace fc::proofs {
     };
   }
 
+  UnpaddedPieceSize padPiece(const std::string &path) {
+    auto size{fs::file_size(path)};
+    auto unpadded{primitives::piece::paddedSize(size)};
+    if (size != unpadded) {
+      fs::resize_file(path, unpadded);
+    }
+    return unpadded;
+  }
 }  // namespace fc::proofs
