@@ -36,6 +36,7 @@ namespace fc::common {
     if (logger == nullptr) {
       logger = ::createLogger(tag);
     }
+    logger->set_level(spdlog::level::debug);
     return logger;
   }
 }  // namespace fc::common

@@ -355,6 +355,7 @@ namespace fc {
 
     auto graphsync{std::make_shared<storage::ipfs::graphsync::GraphsyncImpl>(
         host, scheduler)};
+    common::createLogger("graphsync")->set_level(spdlog::level::trace);
     graphsync->start();
     auto datatransfer{data_transfer::DataTransfer::make(host, graphsync)};
 
