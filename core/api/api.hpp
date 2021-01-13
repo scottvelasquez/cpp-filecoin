@@ -349,6 +349,8 @@ namespace fc::api {
                const FileRef &)
     API_METHOD(ClientStartDeal, Wait<CID>, const StartDealParams &)
 
+    API_METHOD(DealsImportData, void, const CID &, const std::string &)
+
     API_METHOD(GasEstimateMessageGas,
                UnsignedMessage,
                const UnsignedMessage &,

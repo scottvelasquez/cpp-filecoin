@@ -350,6 +350,8 @@ namespace fc::api {
         // TODO(turuslan): FIL-165 implement method
         .ClientStartDeal = {},
         // TODO(turuslan): FIL-165 implement method
+        .DealsImportData = {},
+        // TODO(turuslan): FIL-165 implement method
         .GasEstimateMessageGas = {},
         // TODO(turuslan): FIL-165 implement method
         .MarketReserveFunds = {},

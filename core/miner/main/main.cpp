@@ -405,6 +405,9 @@ namespace fc {
     retrieval_provider->start();
 
     auto mapi{std::make_shared<api::Api>()};
+    mapi->DealsImportData = [&](auto &proposal, auto &path) {
+      return storage_provider->importDataForDeal(proposal, path);
+    };
     mapi->PledgeSector = [&]() -> outcome::result<void> {
       return sealing->pledgeSector();
     };
