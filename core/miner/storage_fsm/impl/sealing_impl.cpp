@@ -348,7 +348,7 @@ namespace fc::mining {
     for (const auto &[key, value] : unsealed_sectors_) {
       auto pads =
           proofs::Proofs::GetRequiredPadding(value.stored, size.padded());
-      if (value.stored + size.padded() + pads.size < sector_size) {
+      if (value.stored + size.padded() + pads.size <= sector_size) {
         return SectorPaddingResponse{
             .sector = key,
             .pads = std::move(pads.pads),
