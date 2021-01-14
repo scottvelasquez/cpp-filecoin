@@ -7,6 +7,7 @@
 #define CPP_FILECOIN_CORE_MARKETS_RETRIEVAL_PROVIDER_IMPL_HPP
 
 #include "api/api.hpp"
+#include "common/io_thread.hpp"
 #include "common/libp2p/cbor_stream.hpp"
 #include "common/logger.hpp"
 #include "data_transfer/dt.hpp"
@@ -147,6 +148,7 @@ namespace fc::markets::retrieval::provider {
     std::shared_ptr<Manager> sealer_;
     std::shared_ptr<Miner> miner_;
     common::Logger logger_ = common::createLogger("RetrievalProvider");
+    IoThread io_;
   };
 }  // namespace fc::markets::retrieval::provider
 

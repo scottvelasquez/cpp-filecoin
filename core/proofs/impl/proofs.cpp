@@ -1109,10 +1109,10 @@ namespace fc::proofs {
 
     uint64_t left = piece_size;
     constexpr auto kDefaultBufferSize = uint64_t(32 * 1024);
-    std::vector<uint8_t> buffer(kDefaultBufferSize);
     auto chunks = kDefaultBufferSize / 127;
     PaddedPieceSize outTwoPow =
         primitives::piece::paddedSize(chunks * 128).padded();
+    std::vector<uint8_t> buffer(outTwoPow.unpadded());
 
     while (left > 0) {
       if (left < outTwoPow.unpadded()) {
@@ -1131,11 +1131,9 @@ namespace fc::proofs {
         return ProofsError::kNotReadEnough;
       }
 
-      unpad(gsl::make_span(read.data(), outTwoPow),
-            gsl::make_span(buffer.data(), outTwoPow.unpadded()));
+      unpad(gsl::make_span(read.data(), outTwoPow), buffer);
 
-      uint64_t write_size =
-          write(output.getFd(), buffer.data(), outTwoPow.unpadded());
+      uint64_t write_size = write(output.getFd(), buffer.data(), buffer.size());
 
       if (write_size != outTwoPow.unpadded()) {
         return ProofsError::kNotWriteEnough;

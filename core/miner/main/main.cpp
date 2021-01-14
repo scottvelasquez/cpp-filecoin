@@ -15,6 +15,7 @@
 #include "clock/impl/utc_clock_impl.hpp"
 #include "codec/json/json.hpp"
 #include "common/file.hpp"
+#include "common/io_thread.hpp"
 #include "common/peer_key.hpp"
 #include "data_transfer/dt.hpp"
 #include "markets/pieceio/pieceio_impl.hpp"
@@ -62,22 +63,6 @@ namespace fc {
     auto join(const std::string &path) const {
       return (repo_path / path).string();
     }
-  };
-
-  // TODO: move
-  struct IoThread {
-    IoThread()
-        : io{std::make_shared<io_context>()},
-          work{io->get_executor()},
-          thread{[this] { io->run(); }} {}
-    ~IoThread() {
-      io->stop();
-      thread.join();
-    }
-
-    std::shared_ptr<io_context> io;
-    boost::asio::executor_work_guard<io_context::executor_type> work;
-    std::thread thread;
   };
 
   outcome::result<Config> readConfig(int argc, char **argv) {

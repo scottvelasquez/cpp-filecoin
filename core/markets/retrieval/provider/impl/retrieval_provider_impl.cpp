@@ -51,7 +51,8 @@ namespace fc::markets::retrieval::provider {
         [this](auto &pdtid, auto &pgsid, auto &, auto _voucher) {
           if (auto _proposal{
                   codec::cbor::decode<DealProposal::Named>(_voucher)}) {
-            return onProposal(pdtid, pgsid, _proposal.value());
+            io_.io->post([=] { onProposal(pdtid, pgsid, _proposal.value()); });
+            return;
           }
           datatransfer_->rejectPull(pdtid, pgsid, {}, {});
         });
@@ -105,7 +106,7 @@ namespace fc::markets::retrieval::provider {
         pdtid, [this, deal](auto &type, auto _voucher) {
           if (auto _payment{
                   codec::cbor::decode<DealPayment::Named>(_voucher)}) {
-            onPayment(deal, _payment.value());
+            io_.io->post([=] { onPayment(deal, _payment.value()); });
           } else {
             doFail(deal, _payment.error().message());
           }
